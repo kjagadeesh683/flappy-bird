@@ -1,0 +1,287 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Bird from './components/Bird';
+import Pipe from './components/Pipe';
+import GameButton from './components/GameButton';
+
+// Add these lines at the top of the file, outside the component
+const flapSound = new Audio('/flap.mp3');
+const hitSound = new Audio('/hit.mp3');
+
+const GRAVITY = 0.4;
+const JUMP_HEIGHT = 8;
+const PIPE_WIDTH = 60;
+const PIPE_GAP = 200;
+const INITIAL_BIRD_SPEED = 3;
+const MIN_PIPE_HEIGHT = 50;
+const MAX_PIPE_HEIGHT = 300;
+const SPEED_INCREMENT = 0.5;
+const SPEED_INCREMENT_INTERVAL = 5;
+const BIRD_WIDTH = 80;
+const BIRD_HEIGHT = 56;
+const BIRD_LEFT_POSITION = 50;
+const CLOUD_SPEED = 0.5;
+
+const Cloud = ({ x, y, scale }) => (
+  <div
+    style={{
+      position: 'absolute',
+      left: x,
+      top: y,
+      width: `${300 * scale}px`,
+      height: `${150 * scale}px`,
+      backgroundImage: 'url("/clouds.png")',
+      backgroundSize: 'contain',
+      backgroundRepeat: 'no-repeat',
+      opacity: 0.8,
+    }}
+  />
+);
+
+function FlappyBird() {
+  const [birdPosition, setBirdPosition] = useState(250);
+  const [birdVelocity, setBirdVelocity] = useState(0);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [pipeHeight, setPipeHeight] = useState(200);
+  const [pipePosition, setPipePosition] = useState(400);
+  const [score, setScore] = useState(0);
+  const [highScore, setHighScore] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
+  const [birdSpeed, setBirdSpeed] = useState(INITIAL_BIRD_SPEED);
+  const [birdRotation, setBirdRotation] = useState(0);
+  const [clouds, setClouds] = useState([
+    { id: 1, x: 400, y: 50, scale: 0.8 },
+    { id: 2, x: 700, y: 100, scale: 1.0 },
+    { id: 3, x: 1000, y: 150, scale: 0.9 },
+    { id: 4, x: 1300, y: 80, scale: 1.1 },
+    { id: 5, x: 1600, y: 120, scale: 0.7 },
+    { id: 6, x: 1900, y: 60, scale: 0.9 },
+    { id: 7, x: 2200, y: 130, scale: 0.8 },
+    { id: 8, x: 2500, y: 90, scale: 1.0 },
+  ]);
+  const lastPipeRef = useRef(400);
+  const [isAngryBird, setIsAngryBird] = useState(false);
+  const [backgroundColor, setBackgroundColor] = useState('skyblue');
+  const [gameOverOpacity, setGameOverOpacity] = useState(0);
+
+  const jump = useCallback(() => {
+    if (gameOver) {
+      setGameOver(false);
+      setScore(0);
+      setBirdPosition(250);
+      setPipePosition(400);
+      setBirdVelocity(0);
+      setBirdSpeed(INITIAL_BIRD_SPEED);
+      lastPipeRef.current = 400;
+      setIsAngryBird(false);
+    }
+    if (!gameStarted) setGameStarted(true);
+    setBirdVelocity(-JUMP_HEIGHT);
+    setBirdRotation(-20);
+    setTimeout(() => setBirdRotation(0), 300);
+
+    flapSound.currentTime = 0;
+    flapSound.play();
+  }, [gameStarted, gameOver]);
+
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.code === 'Space') jump();
+    };
+    document.addEventListener('keypress', handleKeyPress);
+    return () => document.removeEventListener('keypress', handleKeyPress);
+  }, [jump]);
+
+  useEffect(() => {
+    let gameLoop;
+    if (gameStarted && !gameOver) {
+      gameLoop = setInterval(() => {
+        setBirdPosition((position) => {
+          const newPosition = position + birdVelocity;
+          if (newPosition >= 500 - BIRD_HEIGHT) {
+            setGameOver(true);
+            setGameStarted(false);
+            return 500 - BIRD_HEIGHT;
+          }
+          return Math.max(newPosition, 0);
+        });
+        setBirdVelocity((velocity) => Math.min(velocity + GRAVITY, 10));
+
+        setPipePosition((position) => {
+          if (position <= -PIPE_WIDTH) {
+            const newTopHeight = Math.random() * (MAX_PIPE_HEIGHT - MIN_PIPE_HEIGHT) + MIN_PIPE_HEIGHT;
+            setPipeHeight(newTopHeight);
+            lastPipeRef.current = 400;
+            return 400;
+          }
+          if (position < BIRD_LEFT_POSITION && lastPipeRef.current >= BIRD_LEFT_POSITION) {
+            setScore((s) => {
+              const newScore = s + 1;
+              if (newScore % SPEED_INCREMENT_INTERVAL === 0) {
+                setBirdSpeed((speed) => speed + SPEED_INCREMENT);
+              }
+              return newScore;
+            });
+          }
+          lastPipeRef.current = position;
+          return position - birdSpeed;
+        });
+
+        setBackgroundColor(`hsl(200, 100%, ${Math.max(50, 80 - score)}%)`);
+      }, 20);
+    }
+    return () => clearInterval(gameLoop);
+  }, [gameStarted, birdVelocity, gameOver, birdSpeed, score]);
+
+  const handleGameOver = useCallback(() => {
+    setGameStarted(false);
+    setGameOver(true);
+    setIsAngryBird(true);
+    hitSound.play();
+  }, []);
+
+  useEffect(() => {
+    const birdRightEdge = BIRD_LEFT_POSITION + BIRD_WIDTH;
+    const birdBottomEdge = birdPosition + BIRD_HEIGHT;
+    const pipeRightEdge = pipePosition + PIPE_WIDTH;
+
+    const collisionBuffer = 5;
+    const topPipeCollision = birdPosition < pipeHeight - collisionBuffer;
+    const bottomPipeCollision = birdBottomEdge > pipeHeight + PIPE_GAP + collisionBuffer;
+
+    if (
+      birdPosition <= 0 ||
+      birdBottomEdge >= 500 ||
+      (birdRightEdge > pipePosition + collisionBuffer &&
+        BIRD_LEFT_POSITION < pipeRightEdge - collisionBuffer &&
+        (topPipeCollision || bottomPipeCollision))
+    ) {
+      handleGameOver();
+    }
+    if (score > highScore) {
+      setHighScore(score);
+    }
+  }, [birdPosition, pipeHeight, pipePosition, score, highScore, handleGameOver]);
+
+  useEffect(() => {
+    if (gameStarted && !gameOver) {
+      const cloudInterval = setInterval(() => {
+        setClouds(prevClouds =>
+          prevClouds.map(cloud => ({
+            ...cloud,
+            x: cloud.x <= -300 * cloud.scale ? 400 + Math.random() * 200 : cloud.x - CLOUD_SPEED,
+          }))
+        );
+      }, 20);
+
+      return () => clearInterval(cloudInterval);
+    }
+  }, [gameStarted, gameOver]);
+
+  useEffect(() => {
+    if (gameOver) {
+      let opacity = 0;
+      const fadeIn = setInterval(() => {
+        opacity += 0.1;
+        setGameOverOpacity(opacity);
+        if (opacity >= 1) clearInterval(fadeIn);
+      }, 50);
+      return () => clearInterval(fadeIn);
+    }
+  }, [gameOver]);
+
+  const pipeStyle = useCallback((position) => ({
+    transform: `translateX(${position}px) rotate(${Math.sin(position * 0.05) * 2}deg)`,
+  }), []);
+
+  return (
+    <div
+      style={{
+        height: '500px',
+        width: '400px',
+        backgroundColor: backgroundColor,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+      onClick={gameStarted ? jump : undefined}
+    >
+      {clouds.map(cloud => (
+        <Cloud key={cloud.id} x={cloud.x} y={cloud.y} scale={cloud.scale} />
+      ))}
+      {!gameStarted && !gameOver && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '30%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '80%',
+            textAlign: 'center',
+          }}
+        >
+          <img src="/gamename.png" alt="Flappy Bird" style={{ maxWidth: '100%' }} />
+        </div>
+      )}
+      <Bird position={birdPosition} rotation={birdRotation} isAngry={isAngryBird} />
+      {(gameStarted || gameOver) && (
+        <Pipe height={pipeHeight} position={pipePosition} gap={PIPE_GAP} style={pipeStyle(pipePosition)} />
+      )}
+      <div style={{ position: 'absolute', top: 10, left: 10, fontSize: '24px' }}>
+        Score: {score}
+      </div>
+      <div style={{ position: 'absolute', top: 40, left: 10, fontSize: '24px' }}>
+        High Score: {highScore}
+      </div>
+      {!gameStarted && !gameOver && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '80%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <GameButton onClick={jump} text="CLICK TO START" />
+        </div>
+      )}
+      {gameOver && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontSize: '24px',
+            textAlign: 'center',
+            opacity: gameOverOpacity,
+          }}
+        >
+          <div style={{
+            fontSize: '32px',
+            fontWeight: 'bold',
+            color: 'black',
+            textShadow: '-2px -2px 0 white, 2px -2px 0 white, -2px 2px 0 white, 2px 2px 0 white',
+            marginBottom: '20px'
+          }}>
+            GAME OVER
+          </div>
+          <div style={{
+            fontSize: '24px',
+            fontWeight: 'bold',
+            color: 'white',
+            textShadow: '-1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black',
+            marginBottom: '30px'
+          }}>
+            FINAL SCORE: {score}
+          </div>
+          <GameButton onClick={(e) => { e.stopPropagation(); jump(); }} text="PLAY AGAIN" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default FlappyBird;
