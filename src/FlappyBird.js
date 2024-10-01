@@ -340,12 +340,12 @@ function FlappyBird() {
   }, []);
 
   const scoreCardStyle = {
-    backgroundColor: '#4169E1',
+    backgroundColor: 'rgb(65, 105, 225)',
     color: 'white',
     fontSize: '14px',
     padding: '6px 8px',
     borderRadius: '5px',
-    boxShadow: '0 2px 0 #1E90FF',
+    boxShadow: 'rgb(30, 144, 255) 0px 2px 0px',
     textAlign: 'left',
     userSelect: 'none',
     minWidth: '120px',
@@ -376,7 +376,10 @@ function FlappyBird() {
       alignItems: 'center',
       height: '100vh',
       width: '100vw',
-      backgroundColor: '#f0f0f0',
+      backgroundColor: '#87CEEB', // Light sky blue background
+      overflow: 'hidden',
+      margin: 0,
+      padding: 0,
     }}>
       <div
         ref={gameRef}
@@ -385,9 +388,12 @@ function FlappyBird() {
           height: '500px',
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
-          backgroundColor: backgroundColor,
+          backgroundColor: '#87CEEB', // Light sky blue background
           position: 'relative',
           overflow: 'hidden',
+          border: '2px solid #333',
+          borderRadius: '10px',
+          boxShadow: '0 0 20px rgba(0, 0, 0, 0.1)',
         }}
         onClick={gameStarted ? jump : undefined}
       >
@@ -399,6 +405,7 @@ function FlappyBird() {
             display: 'flex',
             flexDirection: 'column',
             gap: '5px',
+            zIndex: 1000,
           }}>
             <div style={scoreCardStyle}>
               <span>Best Score: {highScore}</span>
@@ -426,50 +433,49 @@ function FlappyBird() {
           </div>
         )}
         {!gameStarted && !gameOver && (
-          <GameButton
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleMute();
-            }}
-            text={isMuted ? <FaVolumeMute size={20} /> : <FaVolumeUp size={20} />}
+          <div
             style={{
               position: 'absolute',
               top: '10px',
               right: '10px',
-              width: '40px',
-              height: '40px',
-              padding: 0,
-              minWidth: 'unset',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              fontSize: '24px',
-              zIndex: 1000,
-              backgroundColor: '#4169E1',
-              boxShadow: '0 4px 0 #1E90FF',
-              border: 'none',
-              borderRadius: '5px',
-              transition: 'all 0.1s ease',
+              transform: `scale(${1 / scale})`,
+              transformOrigin: 'top right',
+              zIndex: 1000, // Ensure it's above other elements
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#6495ED';
-              e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
-              e.currentTarget.style.transform = 'translateY(2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#4169E1';
-              e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-            onMouseDown={(e) => {
-              e.currentTarget.style.boxShadow = '0 0 0 #1E90FF';
-              e.currentTarget.style.transform = 'translateY(4px)';
-            }}
-            onMouseUp={(e) => {
-              e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          />
+          >
+            <GameButton
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMute();
+              }}
+              text={isMuted ? <FaVolumeMute size={24} /> : <FaVolumeUp size={24} />}
+              style={{
+                width: '50px',
+                height: '50px',
+                padding: 0,
+                minWidth: 'unset',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                fontSize: '28px',
+                backgroundColor: '#4169E1',
+                boxShadow: '0 4px 0 #1E90FF',
+                border: 'none',
+                borderRadius: '10px',
+                transition: 'all 0.1s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#6495ED';
+                e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
+                e.currentTarget.style.transform = 'translateY(2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#4169E1';
+                e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            />
+          </div>
         )}
         {gameStarted && clouds.map(cloud => (
           <Cloud key={cloud.id} x={cloud.x} y={cloud.y} scale={cloud.scale} />
