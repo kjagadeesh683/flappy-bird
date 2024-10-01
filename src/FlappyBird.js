@@ -434,8 +434,8 @@ function FlappyBird() {
             text={isMuted ? <FaVolumeMute size={20} /> : <FaVolumeUp size={20} />}
             style={{
               position: 'absolute',
-              top: '20px',
-              right: '20px',
+              top: '10px',
+              right: '10px',
               width: '40px',
               height: '40px',
               padding: 0,
