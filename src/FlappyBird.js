@@ -316,18 +316,27 @@ function FlappyBird() {
   useEffect(() => {
     const handleResize = () => {
       if (gameRef.current) {
-        const gameAspectRatio = 400 / 500;
-        const windowAspectRatio = window.innerWidth / window.innerHeight;
+        const gameWidth = 400;
+        const gameHeight = 500;
+        const gameAspectRatio = gameWidth / gameHeight;
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const windowAspectRatio = windowWidth / windowHeight;
 
         let newScale;
+        let maxScale = 1.5; // Increased maximum scale
+
         if (windowAspectRatio > gameAspectRatio) {
-          newScale = window.innerHeight / 500;
+          // Window is wider than the game
+          newScale = (windowHeight * 0.95) / gameHeight; // Use 95% of the window height
         } else {
-          newScale = window.innerWidth / 400;
+          // Window is taller than the game
+          newScale = (windowWidth * 0.95) / gameWidth; // Use 95% of the window width
         }
 
-        // Limit the scale to a reasonable range, e.g., 0.5 to 2
-        newScale = Math.max(0.5, Math.min(newScale, 2));
+        // Limit the scale
+        newScale = Math.min(newScale, maxScale);
+        newScale = Math.max(newScale, 1); // Ensure the game is never smaller than its original size
 
         setScale(newScale);
       }
@@ -376,7 +385,7 @@ function FlappyBird() {
       alignItems: 'center',
       height: '100vh',
       width: '100vw',
-      backgroundColor: '#87CEEB', // Light sky blue background
+      backgroundColor: '#87CEEB',
       overflow: 'hidden',
       margin: 0,
       padding: 0,
@@ -388,7 +397,7 @@ function FlappyBird() {
           height: '500px',
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
-          backgroundColor: '#87CEEB', // Light sky blue background
+          backgroundColor: '#87CEEB',
           position: 'relative',
           overflow: 'hidden',
           border: '2px solid #333',
@@ -436,11 +445,11 @@ function FlappyBird() {
           <div
             style={{
               position: 'absolute',
-              top: '10px',
-              right: '10px',
+              top: '20px',
+              right: '20px',
               transform: `scale(${1 / scale})`,
               transformOrigin: 'top right',
-              zIndex: 1000, // Ensure it's above other elements
+              zIndex: 1000,
             }}
           >
             <GameButton
