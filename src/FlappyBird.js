@@ -3,43 +3,23 @@ import Bird from './components/Bird';
 import Pipe from './components/Pipe';
 import GameButton from './components/GameButton';
 import { supabase } from './supabase';
-import { FaVolumeMute, FaVolumeUp } from 'react-icons/fa';
+import { FaVolumeMute, FaVolumeUp, FaCog } from 'react-icons/fa';
 
-// Add these lines at the top of the file, outside the component
+// Keep these at the top
 const flapSound = new Audio('/flap.mp3');
 const hitSound = new Audio('/hit.mp3');
 
-const GRAVITY = 0.4;
-const JUMP_HEIGHT = 8;
-const PIPE_WIDTH = 60;
-const PIPE_GAP = 200;
-const INITIAL_BIRD_SPEED = 3;
-const MIN_PIPE_HEIGHT = 50;
-const MAX_PIPE_HEIGHT = 300;
-const SPEED_INCREMENT = 0.5;
-const SPEED_INCREMENT_INTERVAL = 5;
-const BIRD_WIDTH = 80;
-const BIRD_HEIGHT = 56;
-const BIRD_LEFT_POSITION = 50;
-const CLOUD_SPEED = 0.5;
-
-const Cloud = ({ x, y, scale }) => (
-  <div
-    style={{
-      position: 'absolute',
-      left: x,
-      top: y,
-      width: `${300 * scale}px`,
-      height: `${150 * scale}px`,
-      backgroundImage: 'url("/clouds.png")',
-      backgroundSize: 'contain',
-      backgroundRepeat: 'no-repeat',
-      opacity: 0.8,
-    }}
-  />
-);
+flapSound.preload = 'auto';
+hitSound.preload = 'auto';
 
 function FlappyBird() {
+  // Move audioContext and buffers into component as refs
+  const audioContextRef = useRef(null);
+  const flapBufferRef = useRef(null);
+  const hitBufferRef = useRef(null);
+
+  // Add existing state variables
+  const [isMuted, setIsMuted] = useState(false);
   const [birdPosition, setBirdPosition] = useState(250);
   const [birdVelocity, setBirdVelocity] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
@@ -51,7 +31,7 @@ function FlappyBird() {
     return savedHighScore ? parseInt(savedHighScore, 10) : 0;
   });
   const [gameOver, setGameOver] = useState(false);
-  const [birdSpeed, setBirdSpeed] = useState(INITIAL_BIRD_SPEED);
+  const [birdSpeed, setBirdSpeed] = useState(3);
   const [birdRotation, setBirdRotation] = useState(0);
   const [clouds, setClouds] = useState([
     { id: 1, x: 400, y: 50, scale: 0.8 },
@@ -72,11 +52,15 @@ function FlappyBird() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardOpacity, setLeaderboardOpacity] = useState(0);
   const [showTopLeaderboard, setShowTopLeaderboard] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
   const [scale, setScale] = useState(1);
   const gameRef = useRef(null);
   const [globalHighScore, setGlobalHighScore] = useState(0);
   const [countdown, setCountdown] = useState(null);
+  const [leaderboardFilter, setLeaderboardFilter] = useState('all'); // 'all', 'daily', 'weekly', 'monthly'
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Add new state for tracking top 10 status
+  const [isInTopTen, setIsInTopTen] = useState(false);
 
   const toggleMute = () => {
     setIsMuted(prevMuted => {
@@ -87,8 +71,81 @@ function FlappyBird() {
     });
   };
 
+  // Move initAudioContext inside component
+  const initAudioContext = async () => {
+    try {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+
+      const [flapResponse, hitResponse] = await Promise.all([
+        fetch('/flap.mp3'),
+        fetch('/hit.mp3')
+      ]);
+
+      const [flapData, hitData] = await Promise.all([
+        flapResponse.arrayBuffer(),
+        hitResponse.arrayBuffer()
+      ]);
+
+      [flapBufferRef.current, hitBufferRef.current] = await Promise.all([
+        audioContextRef.current.decodeAudioData(flapData),
+        audioContextRef.current.decodeAudioData(hitData)
+      ]);
+    } catch (error) {
+      console.error('Error initializing audio:', error);
+    }
+  };
+
+  // Move playSound inside component
+  const playSound = (buffer) => {
+    if (!audioContextRef.current || !buffer || isMuted) return;
+
+    try {
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContextRef.current.destination);
+      source.start(0);
+    } catch (error) {
+      console.error('Error playing sound:', error);
+    }
+  };
+
+  const GRAVITY = 0.4;
+  const JUMP_HEIGHT = 8;
+  const PIPE_WIDTH = 60;
+  const PIPE_GAP = 200;
+  const INITIAL_BIRD_SPEED = 3;
+  const MIN_PIPE_HEIGHT = 50;
+  const MAX_PIPE_HEIGHT = 300;
+  const SPEED_INCREMENT = 0.5;
+  const SPEED_INCREMENT_INTERVAL = 5;
+  const BIRD_WIDTH = 80;
+  const BIRD_HEIGHT = 56;
+  const BIRD_LEFT_POSITION = 50;
+  const CLOUD_SPEED = 0.5;
+
+  const Cloud = ({ x, y, scale }) => (
+    <div
+      style={{
+        position: 'absolute',
+        left: x,
+        top: y,
+        width: `${300 * scale}px`,
+        height: `${150 * scale}px`,
+        backgroundImage: 'url("/clouds.png")',
+        backgroundSize: 'contain',
+        backgroundRepeat: 'no-repeat',
+        opacity: 0.8,
+      }}
+    />
+  );
+
   const jump = useCallback(() => {
     if (countdown !== null || showTopLeaderboard || showLeaderboard) return;
+
+    if (!audioContextRef.current) {
+      initAudioContext();
+    }
+
     if (gameOver) {
       setGameOver(false);
       setScore(0);
@@ -99,15 +156,13 @@ function FlappyBird() {
       lastPipeRef.current = 400;
       setIsAngryBird(false);
     }
+
     if (!gameStarted) setGameStarted(true);
     setBirdVelocity(-JUMP_HEIGHT);
     setBirdRotation(-20);
     setTimeout(() => setBirdRotation(0), 300);
 
-    if (!isMuted) {
-      flapSound.currentTime = 0;
-      flapSound.play();
-    }
+    playSound(flapBufferRef.current);
   }, [gameStarted, gameOver, showTopLeaderboard, showLeaderboard, isMuted, countdown]);
 
   useEffect(() => {
@@ -159,15 +214,21 @@ function FlappyBird() {
     return () => clearInterval(gameLoop);
   }, [gameStarted, birdVelocity, gameOver, birdSpeed, score]);
 
-  const handleGameOver = useCallback(() => {
+  // Update handleGameOver to use the refs
+  const handleGameOver = useCallback(async () => {
     setGameStarted(false);
     setGameOver(true);
     setIsAngryBird(true);
+
+    // Check if score is in daily top 10
+    const isTop10 = await isScoreInTopTen(score);
+    setIsInTopTen(isTop10);
+
     if (!isMuted) {
-      hitSound.play();
+      playSound(hitBufferRef.current);
     }
     setShowLeaderboard(true);
-  }, [isMuted]);
+  }, [isMuted, score]);
 
   useEffect(() => {
     const birdRightEdge = BIRD_LEFT_POSITION + BIRD_WIDTH;
@@ -378,6 +439,80 @@ function FlappyBird() {
     fetchLeaderboard();
   };
 
+  const fetchFilteredLeaderboard = async (filter) => {
+    try {
+      let query = supabase
+        .from('leaderboard')
+        .select('*')
+        .order('score', { ascending: false })
+        .limit(10);
+
+      // Add date filtering
+      const now = new Date();
+      if (filter === 'daily') {
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        query = query.gte('created_at', today);
+      } else if (filter === 'weekly') {
+        const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+        query = query.gte('created_at', weekAgo);
+      } else if (filter === 'monthly') {
+        const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).toISOString();
+        query = query.gte('created_at', monthAgo);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      setLeaderboard(data);
+    } catch (error) {
+      console.error('Error fetching filtered leaderboard:', error.message);
+    }
+  };
+
+  const settingsButtonStyle = {
+    width: '50px',
+    height: '50px',
+    padding: 0,
+    minWidth: 'unset',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    fontSize: '28px',
+    backgroundColor: '#4169E1',
+    boxShadow: '0 4px 0 #1E90FF',
+    border: 'none',
+    borderRadius: '10px',
+    transition: 'all 0.1s ease',
+    marginLeft: '10px',
+  };
+
+  // Update the isScoreInTopTen function to check daily scores
+  const isScoreInTopTen = async (newScore) => {
+    try {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+      const { data, error } = await supabase
+        .from('leaderboard')
+        .select('score')
+        .gte('created_at', today)
+        .order('score', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      // If there are less than 10 scores today, new score will be in top 10
+      if (data.length < 10) return true;
+
+      // Check if new score is higher than the lowest score in today's top 10
+      const lowestTopScore = data[data.length - 1].score;
+      return newScore > lowestTopScore;
+    } catch (error) {
+      console.error('Error checking daily top scores:', error);
+      return false;
+    }
+  };
+
   return (
     <div style={{
       display: 'flex',
@@ -407,22 +542,24 @@ function FlappyBird() {
         onClick={gameStarted ? jump : undefined}
       >
         {!gameStarted && !gameOver && !countdown && (
-          <div style={{
-            position: 'absolute',
-            top: '10px',
-            left: '10px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '5px',
-            zIndex: 1000,
-          }}>
-            <div style={scoreCardStyle}>
-              <span>Best Score: {highScore}</span>
+          <>
+            <div style={{
+              position: 'absolute',
+              top: '10px',
+              left: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '5px',
+              zIndex: 1000,
+            }}>
+              <div style={scoreCardStyle}>
+                <span>Best Score: {highScore}</span>
+              </div>
+              <div style={clickableScoreCardStyle}>
+                <span>Global High Score: {globalHighScore}</span>
+              </div>
             </div>
-            <div style={scoreCardStyle}>
-              <span>Global High Score: {globalHighScore}</span>
-            </div>
-          </div>
+          </>
         )}
         {(gameStarted || gameOver) && (
           <div style={{
@@ -450,6 +587,8 @@ function FlappyBird() {
               transform: `scale(${1 / scale})`,
               transformOrigin: 'top right',
               zIndex: 1000,
+              display: 'flex',
+              gap: '10px',
             }}
           >
             <GameButton
@@ -458,21 +597,25 @@ function FlappyBird() {
                 toggleMute();
               }}
               text={isMuted ? <FaVolumeMute size={24} /> : <FaVolumeUp size={24} />}
-              style={{
-                width: '50px',
-                height: '50px',
-                padding: 0,
-                minWidth: 'unset',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                fontSize: '28px',
-                backgroundColor: '#4169E1',
-                boxShadow: '0 4px 0 #1E90FF',
-                border: 'none',
-                borderRadius: '10px',
-                transition: 'all 0.1s ease',
+              style={settingsButtonStyle}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#6495ED';
+                e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
+                e.currentTarget.style.transform = 'translateY(2px)';
               }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#4169E1';
+                e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            />
+            <GameButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowSettings(true);
+              }}
+              text={<FaCog size={24} />}
+              style={settingsButtonStyle}
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = '#6495ED';
                 e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
@@ -566,46 +709,107 @@ function FlappyBird() {
             }}>
               Game Over
             </h2>
-            <h3 style={{
-              color: 'white',
-              fontSize: '28px',
-              marginBottom: '30px',
-              textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
-            }}>
-              You're on the Leaderboard!
-            </h3>
-            <form onSubmit={submitScore} style={{
-              marginBottom: '30px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              width: '80%',
-            }}>
-              <div style={{
-                marginBottom: '20px',
-                fontSize: '24px',
-              }}>
-                Enter your name:
-              </div>
-              <input
-                type="text"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                style={{
-                  padding: '10px',
-                  width: '80%',
-                  marginBottom: '20px',
-                  backgroundColor: 'rgba(255,255,255,0.8)',
-                  border: 'none',
-                  borderRadius: '5px',
-                  fontSize: '18px',
-                }}
-              />
-              <GameButton onClick={submitScore} text="Submit" />
-            </form>
             <div style={{ fontSize: '24px', marginBottom: '30px' }}>
               Your Score: {score}
             </div>
+
+            {isInTopTen ? (
+              // Show name input form only if player made it to top 10
+              <>
+                <h3 style={{
+                  color: 'white',
+                  fontSize: '28px',
+                  marginBottom: '30px',
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+                }}>
+                  You're on the Leaderboard!
+                </h3>
+                <form onSubmit={submitScore} style={{
+                  marginBottom: '30px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  width: '80%',
+                }}>
+                  <div style={{
+                    marginBottom: '20px',
+                    fontSize: '24px',
+                  }}>
+                    Enter your name:
+                  </div>
+                  <input
+                    type="text"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    style={{
+                      padding: '10px',
+                      width: '80%',
+                      marginBottom: '20px',
+                      backgroundColor: 'rgba(255,255,255,0.8)',
+                      border: 'none',
+                      borderRadius: '5px',
+                      fontSize: '18px',
+                    }}
+                  />
+                  <GameButton onClick={submitScore} text="Submit" />
+                </form>
+              </>
+            ) : (
+              // Show Play Again and Back to Home buttons if player didn't make it to top 10
+              <div style={{
+                display: 'flex',
+                gap: '20px',
+                marginTop: '20px',
+              }}>
+                <GameButton
+                  onClick={() => {
+                    setShowLeaderboard(false);
+                    setBirdPosition(250);
+                    setPipePosition(400);
+                    setBirdVelocity(0);
+                    setBirdSpeed(INITIAL_BIRD_SPEED);
+                    setScore(0);
+                    setIsAngryBird(false);
+                    setGameOver(false);
+
+                    // Start countdown
+                    setCountdown(3);
+                    const countdownInterval = setInterval(() => {
+                      setCountdown(prev => {
+                        if (prev === 1) {
+                          clearInterval(countdownInterval);
+                          setTimeout(() => {
+                            setCountdown(null);
+                            setGameStarted(true);
+                          }, 500);
+                          return "GO!";
+                        }
+                        return prev - 1;
+                      });
+                    }, 1000);
+                  }}
+                  text="Play Again"
+                />
+                <GameButton
+                  onClick={() => {
+                    setShowLeaderboard(false);
+                    setGameStarted(false);
+                    setGameOver(false);
+                    setBirdPosition(250);
+                    setPipePosition(400);
+                    setBirdVelocity(0);
+                    setBirdSpeed(INITIAL_BIRD_SPEED);
+                    setScore(0);
+                    setIsAngryBird(false);
+                    setClouds(prevClouds => prevClouds.map(cloud => ({
+                      ...cloud,
+                      x: 400 + Math.random() * 2100
+                    })));
+                  }}
+                  text="Back to Home"
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -617,125 +821,126 @@ function FlappyBird() {
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: `rgba(0, 0, 0, ${leaderboardOpacity * 0.8})`,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
+              justifyContent: 'center',
               alignItems: 'center',
-              color: 'white',
-              fontFamily: 'Arial, sans-serif',
-              opacity: leaderboardOpacity,
-              transition: 'opacity 0.5s ease-in-out',
-              padding: '20px',
+              zIndex: 2000,
+              padding: '10px',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div style={{
-              backgroundColor: '#4169E1',
-              color: 'white',
-              fontSize: '28px',
-              padding: '10px 20px',
-              borderRadius: '5px',
-              boxShadow: '0 4px 0 #1E90FF',
-              marginBottom: '20px',
-              textAlign: 'center',
-              userSelect: 'none',
-              cursor: 'default',
-            }}>
-              Top 10 Leaderboard
-            </div>
-            <div style={{
-              width: '100%',
-              maxWidth: '300px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: '10px',
+              backgroundColor: 'black',
               padding: '15px',
-              boxShadow: '0 0 10px rgba(255, 255, 255, 0.2)',
-              overflowY: 'auto',
-              maxHeight: '60%',
-            }}>
-              {leaderboard.map((entry, index) => (
-                <div key={index} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '8px 0',
-                  borderBottom: index < leaderboard.length - 1 ? '1px solid rgba(255, 255, 255, 0.2)' : 'none',
-                }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}>
-                    <span style={{
-                      width: '30px',
-                      fontSize: '18px',
-                      color: 'white',
-                    }}>
-                      {`${index + 1}.`}
-                    </span>
-                    <span style={{
-                      fontSize: '18px',
-                      marginLeft: '10px',
-                      color: 'white',
-                    }}>
-                      {entry.name}
-                    </span>
-                  </div>
-                  <span style={{
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    color: 'white',
-                  }}>
-                    {entry.score}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div style={{
+              borderRadius: '15px',
+              width: '80%',
+              maxWidth: '280px',
+              maxHeight: '70vh',
               display: 'flex',
-              justifyContent: 'center',
-              gap: '20px',
-              marginTop: '20px',
+              flexDirection: 'column',
             }}>
-              <GameButton
-                onClick={() => {
-                  setShowTopLeaderboard(false);
-                  setShowLeaderboard(false);
-                  setBirdPosition(250);
-                  setPipePosition(400);  // Reset pipe position
-                  setBirdVelocity(0);
-                  setBirdSpeed(INITIAL_BIRD_SPEED);
-                  setScore(0);
-                  setIsAngryBird(false);
-
-                  // Start the countdown
-                  setCountdown(3);
-
-                  const countdownInterval = setInterval(() => {
-                    setCountdown(prev => {
-                      if (prev === 1) {
-                        clearInterval(countdownInterval);
-                        setTimeout(() => {
-                          setCountdown(null);
-                          setGameStarted(true);
-                          setGameOver(false);
-                        }, 1000); // Show "GO!" for 1 second
-                        return "GO!";
-                      }
-                      return prev - 1;
-                    });
-                  }, 1000);
-                }}
-                text="Play Again"
-                style={{
-                  fontSize: '20px',
-                  padding: '10px 20px',
-                  backgroundColor: '#4169E1',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                }}
-              />
+              <h2 style={{
+                color: 'white',
+                textAlign: 'center',
+                marginBottom: '10px',
+                fontSize: '20px',
+              }}>
+                Leaderboard
+              </h2>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
+                gap: '4px',
+              }}>
+                <GameButton
+                  onClick={() => {
+                    setLeaderboardFilter('all');
+                    fetchFilteredLeaderboard('all');
+                  }}
+                  text="All"
+                  style={{
+                    padding: '5px',
+                    fontSize: '11px',
+                    backgroundColor: leaderboardFilter === 'all' ? '#4169E1' : '#2d4ba1',
+                    flex: 1,
+                  }}
+                />
+                <GameButton
+                  onClick={() => {
+                    setLeaderboardFilter('daily');
+                    fetchFilteredLeaderboard('daily');
+                  }}
+                  text="Daily"
+                  style={{
+                    padding: '5px',
+                    fontSize: '11px',
+                    backgroundColor: leaderboardFilter === 'daily' ? '#4169E1' : '#2d4ba1',
+                    flex: 1,
+                  }}
+                />
+                <GameButton
+                  onClick={() => {
+                    setLeaderboardFilter('weekly');
+                    fetchFilteredLeaderboard('weekly');
+                  }}
+                  text="Weekly"
+                  style={{
+                    padding: '5px',
+                    fontSize: '11px',
+                    backgroundColor: leaderboardFilter === 'weekly' ? '#4169E1' : '#2d4ba1',
+                    flex: 1,
+                  }}
+                />
+                <GameButton
+                  onClick={() => {
+                    setLeaderboardFilter('monthly');
+                    fetchFilteredLeaderboard('monthly');
+                  }}
+                  text="Monthly"
+                  style={{
+                    padding: '5px',
+                    fontSize: '11px',
+                    backgroundColor: leaderboardFilter === 'monthly' ? '#4169E1' : '#2d4ba1',
+                    flex: 1,
+                  }}
+                />
+              </div>
+              <div style={{
+                overflowY: 'auto',
+                marginBottom: '10px',
+                padding: '8px',
+                backgroundColor: 'rgba(65, 105, 225, 0.1)',
+                borderRadius: '10px',
+                maxHeight: '35vh',
+              }}>
+                {leaderboard.length > 0 ? (
+                  leaderboard.map((entry, index) => (
+                    <div key={index} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      padding: '6px',
+                      borderBottom: '1px solid rgba(65, 105, 225, 0.3)',
+                      color: 'white',
+                      fontSize: '13px',
+                    }}>
+                      <span>{index + 1}. {entry.name}</span>
+                      <span>{entry.score}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{
+                    color: 'white',
+                    textAlign: 'center',
+                    padding: '10px',
+                    fontSize: '13px',
+                  }}>
+                    No scores yet for this period
+                  </div>
+                )}
+              </div>
               <GameButton
                 onClick={() => {
                   setShowTopLeaderboard(false);
@@ -748,23 +953,109 @@ function FlappyBird() {
                   setBirdSpeed(INITIAL_BIRD_SPEED);
                   setScore(0);
                   setIsAngryBird(false);
-                  // Reset cloud positions
+                  setPlayerName('');
                   setClouds(prevClouds => prevClouds.map(cloud => ({
                     ...cloud,
                     x: 400 + Math.random() * 2100
                   })));
                 }}
-                text="Back to Home"
+                text="Close"
                 style={{
-                  fontSize: '20px',
-                  padding: '10px 20px',
-                  backgroundColor: '#4169E1',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  backgroundColor: '#FF0000',
+                  boxShadow: '0 4px 0 #CC0000',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#FF3333';
+                  e.currentTarget.style.boxShadow = '0 2px 0 #CC0000';
+                  e.currentTarget.style.transform = 'translateY(2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#FF0000';
+                  e.currentTarget.style.boxShadow = '0 4px 0 #CC0000';
+                  e.currentTarget.style.transform = 'translateY(0)';
                 }}
               />
+            </div>
+          </div>
+        )}
+        {showSettings && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 2000,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                backgroundColor: 'black',
+                padding: '30px',
+                borderRadius: '15px',
+                width: '80%',
+                maxWidth: '300px',
+              }}
+            >
+              <h2 style={{
+                color: 'white',
+                textAlign: 'center',
+                marginBottom: '30px',
+                fontSize: '28px',
+              }}>
+                Settings
+              </h2>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '15px',
+              }}>
+                <GameButton
+                  onClick={() => {
+                    setShowSettings(false);
+                    setShowTopLeaderboard(true);
+                    fetchLeaderboard();
+                  }}
+                  text="Leaderboard"
+                  style={{
+                    width: '100%',
+                    padding: '15px',
+                    fontSize: '18px',
+                    backgroundColor: '#4169E1',
+                  }}
+                />
+                <GameButton
+                  onClick={() => setShowSettings(false)}
+                  text="Close"
+                  style={{
+                    width: '100%',
+                    padding: '15px',
+                    fontSize: '18px',
+                    backgroundColor: '#FF0000',
+                    boxShadow: '0 4px 0 #CC0000',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#FF3333';
+                    e.currentTarget.style.boxShadow = '0 2px 0 #CC0000';
+                    e.currentTarget.style.transform = 'translateY(2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#FF0000';
+                    e.currentTarget.style.boxShadow = '0 4px 0 #CC0000';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
