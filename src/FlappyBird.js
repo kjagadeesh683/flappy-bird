@@ -127,14 +127,14 @@ function FlappyBird() {
     <div
       style={{
         position: 'absolute',
-        left: x,
-        top: y,
-        width: `${300 * scale}px`,
-        height: `${150 * scale}px`,
+        transform: `translate3d(${x}px, ${y}px, 0) scale(${scale})`,
+        width: '300px',
+        height: '150px',
         backgroundImage: 'url("/clouds.png")',
         backgroundSize: 'contain',
         backgroundRepeat: 'no-repeat',
         opacity: 0.8,
+        willChange: 'transform',
       }}
     />
   );
@@ -260,10 +260,10 @@ function FlappyBird() {
         setClouds(prevClouds =>
           prevClouds.map(cloud => ({
             ...cloud,
-            x: cloud.x <= -300 * cloud.scale ? 400 + Math.random() * 200 : cloud.x - CLOUD_SPEED,
+            x: cloud.x <= -300 ? window.innerWidth + Math.random() * 200 : cloud.x - CLOUD_SPEED,
           }))
         );
-      }, 20);
+      }, 16);
 
       return () => clearInterval(cloudInterval);
     }
@@ -578,56 +578,75 @@ function FlappyBird() {
             </div>
           </div>
         )}
-        {!gameStarted && !gameOver && (
-          <div
-            style={{
+        {!gameStarted && !gameOver && !countdown && score === 0 && (
+          <>
+            <div style={{
               position: 'absolute',
-              top: '20px',
-              right: '20px',
-              transform: `scale(${1 / scale})`,
-              transformOrigin: 'top right',
-              zIndex: 1000,
+              top: '10px',
+              left: '10px',
               display: 'flex',
-              gap: '10px',
-            }}
-          >
-            <GameButton
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleMute();
+              flexDirection: 'column',
+              gap: '5px',
+              zIndex: 1000,
+            }}>
+              <div style={scoreCardStyle}>
+                <span>Best Score: {highScore}</span>
+              </div>
+              <div style={clickableScoreCardStyle}>
+                <span>Global High Score: {globalHighScore}</span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                transform: `scale(${1 / scale})`,
+                transformOrigin: 'top right',
+                zIndex: 1000,
+                display: 'flex',
+                gap: '10px',
               }}
-              text={isMuted ? <FaVolumeMute size={24} /> : <FaVolumeUp size={24} />}
-              style={settingsButtonStyle}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#6495ED';
-                e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
-                e.currentTarget.style.transform = 'translateY(2px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#4169E1';
-                e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            />
-            <GameButton
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowSettings(true);
-              }}
-              text={<FaCog size={24} />}
-              style={settingsButtonStyle}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#6495ED';
-                e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
-                e.currentTarget.style.transform = 'translateY(2px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#4169E1';
-                e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            />
-          </div>
+            >
+              <GameButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMute();
+                }}
+                text={isMuted ? <FaVolumeMute size={24} /> : <FaVolumeUp size={24} />}
+                style={settingsButtonStyle}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#6495ED';
+                  e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
+                  e.currentTarget.style.transform = 'translateY(2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#4169E1';
+                  e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              />
+              <GameButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSettings(true);
+                }}
+                text={<FaCog size={24} />}
+                style={settingsButtonStyle}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#6495ED';
+                  e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
+                  e.currentTarget.style.transform = 'translateY(2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#4169E1';
+                  e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              />
+            </div>
+          </>
         )}
         {gameStarted && clouds.map(cloud => (
           <Cloud key={cloud.id} x={cloud.x} y={cloud.y} scale={cloud.scale} />
@@ -665,7 +684,7 @@ function FlappyBird() {
         {(gameStarted || gameOver) && countdown === null && (
           <Pipe height={pipeHeight} position={pipePosition} gap={PIPE_GAP} style={pipeStyle(pipePosition)} />
         )}
-        {!gameStarted && !gameOver && (
+        {!gameStarted && !gameOver && !countdown && (
           <div
             style={{
               position: 'absolute',
@@ -678,7 +697,7 @@ function FlappyBird() {
               gap: '10px',
             }}
           >
-            <GameButton onClick={jump} text="CLICK TO START" />
+            {score === 0 && <GameButton onClick={jump} text="CLICK TO START" />}
           </div>
         )}
         {gameOver && showLeaderboard && !showTopLeaderboard && (
@@ -821,163 +840,142 @@ function FlappyBird() {
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              backgroundColor: 'black',
               display: 'flex',
-              flexDirection: 'column',
               justifyContent: 'center',
               alignItems: 'center',
               zIndex: 2000,
-              padding: '10px',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{
-              backgroundColor: 'black',
-              padding: '15px',
-              borderRadius: '15px',
-              width: '80%',
-              maxWidth: '280px',
-              maxHeight: '70vh',
-              display: 'flex',
-              flexDirection: 'column',
-            }}>
-              <h2 style={{
-                color: 'white',
-                textAlign: 'center',
-                marginBottom: '10px',
-                fontSize: '20px',
-              }}>
-                Leaderboard
-              </h2>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: '10px',
-                gap: '4px',
-              }}>
-                <GameButton
-                  onClick={() => {
-                    setLeaderboardFilter('all');
-                    fetchFilteredLeaderboard('all');
-                  }}
-                  text="All"
-                  style={{
-                    padding: '5px',
-                    fontSize: '11px',
-                    backgroundColor: leaderboardFilter === 'all' ? '#4169E1' : '#2d4ba1',
-                    flex: 1,
-                  }}
-                />
-                <GameButton
-                  onClick={() => {
-                    setLeaderboardFilter('daily');
-                    fetchFilteredLeaderboard('daily');
-                  }}
-                  text="Daily"
-                  style={{
-                    padding: '5px',
-                    fontSize: '11px',
-                    backgroundColor: leaderboardFilter === 'daily' ? '#4169E1' : '#2d4ba1',
-                    flex: 1,
-                  }}
-                />
-                <GameButton
-                  onClick={() => {
-                    setLeaderboardFilter('weekly');
-                    fetchFilteredLeaderboard('weekly');
-                  }}
-                  text="Weekly"
-                  style={{
-                    padding: '5px',
-                    fontSize: '11px',
-                    backgroundColor: leaderboardFilter === 'weekly' ? '#4169E1' : '#2d4ba1',
-                    flex: 1,
-                  }}
-                />
-                <GameButton
-                  onClick={() => {
-                    setLeaderboardFilter('monthly');
-                    fetchFilteredLeaderboard('monthly');
-                  }}
-                  text="Monthly"
-                  style={{
-                    padding: '5px',
-                    fontSize: '11px',
-                    backgroundColor: leaderboardFilter === 'monthly' ? '#4169E1' : '#2d4ba1',
-                    flex: 1,
-                  }}
-                />
-              </div>
-              <div style={{
-                overflowY: 'auto',
-                marginBottom: '10px',
-                padding: '8px',
-                backgroundColor: 'rgba(65, 105, 225, 0.1)',
+            <div
+              style={{
+                width: '90%',
+                maxWidth: '320px',
+                backgroundColor: '#1a1a2e',
                 borderRadius: '10px',
-                maxHeight: '35vh',
+                overflow: 'hidden',
+                border: '2px solid #4169E1',
+              }}
+            >
+              <div style={{
+                backgroundColor: '#4169E1',
+                padding: '10px',
+                textAlign: 'center',
+              }}>
+                <h2 style={{
+                  color: 'white',
+                  margin: 0,
+                  fontSize: '20px',
+                  fontWeight: 'bold',
+                }}>
+                  Leaderboard
+                </h2>
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '2px',
+                padding: '8px',
+                backgroundColor: '#4169E1',
+              }}>
+                {['all', 'daily', 'weekly', 'monthly'].map((filter) => (
+                  <GameButton
+                    key={filter}
+                    onClick={() => {
+                      setLeaderboardFilter(filter);
+                      fetchFilteredLeaderboard(filter);
+                    }}
+                    text={filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    style={{
+                      padding: '6px 0',
+                      fontSize: '12px',
+                      backgroundColor: leaderboardFilter === filter ? '#4169E1' : '#2d4ba1',
+                      border: leaderboardFilter === filter ? '2px solid white' : 'none',
+                      borderRadius: '6px',
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div style={{
+                maxHeight: '300px',
+                overflowY: 'auto',
+                padding: '8px',
+                backgroundColor: '#1a1a2e',
               }}>
                 {leaderboard.length > 0 ? (
                   leaderboard.map((entry, index) => (
                     <div key={index} style={{
                       display: 'flex',
                       justifyContent: 'space-between',
-                      padding: '6px',
-                      borderBottom: '1px solid rgba(65, 105, 225, 0.3)',
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      margin: '2px 0',
+                      backgroundColor: index % 2 === 0 ? 'rgba(65, 105, 225, 0.15)' : 'rgba(65, 105, 225, 0.05)',
+                      borderRadius: '6px',
                       color: 'white',
-                      fontSize: '13px',
+                      fontSize: '14px',
                     }}>
-                      <span>{index + 1}. {entry.name}</span>
-                      <span>{entry.score}</span>
+                      <span style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}>
+                        <strong style={{ minWidth: '20px' }}>
+                          {index + 1}.
+                        </strong>
+                        {entry.name}
+                      </span>
+                      <span style={{ fontWeight: 'bold' }}>
+                        {entry.score}
+                      </span>
                     </div>
                   ))
                 ) : (
                   <div style={{
                     color: 'white',
                     textAlign: 'center',
-                    padding: '10px',
-                    fontSize: '13px',
+                    padding: '15px',
+                    fontSize: '14px',
+                    opacity: 0.7,
                   }}>
                     No scores yet for this period
                   </div>
                 )}
               </div>
-              <GameButton
-                onClick={() => {
-                  setShowTopLeaderboard(false);
-                  setShowLeaderboard(false);
-                  setGameStarted(false);
-                  setGameOver(false);
-                  setBirdPosition(250);
-                  setPipePosition(400);
-                  setBirdVelocity(0);
-                  setBirdSpeed(INITIAL_BIRD_SPEED);
-                  setScore(0);
-                  setIsAngryBird(false);
-                  setPlayerName('');
-                  setClouds(prevClouds => prevClouds.map(cloud => ({
-                    ...cloud,
-                    x: 400 + Math.random() * 2100
-                  })));
-                }}
-                text="Close"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  fontSize: '14px',
-                  backgroundColor: '#FF0000',
-                  boxShadow: '0 4px 0 #CC0000',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#FF3333';
-                  e.currentTarget.style.boxShadow = '0 2px 0 #CC0000';
-                  e.currentTarget.style.transform = 'translateY(2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#FF0000';
-                  e.currentTarget.style.boxShadow = '0 4px 0 #CC0000';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              />
+
+              <div style={{
+                padding: '8px',
+                backgroundColor: '#1a1a2e',
+                borderTop: '1px solid rgba(65, 105, 225, 0.3)',
+              }}>
+                <GameButton
+                  onClick={() => {
+                    setShowTopLeaderboard(false);
+                    setShowLeaderboard(false);
+                    setGameStarted(false);
+                    setGameOver(false);
+                    setBirdPosition(250);
+                    setPipePosition(400);
+                    setBirdVelocity(0);
+                    setBirdSpeed(INITIAL_BIRD_SPEED);
+                    setScore(0);
+                    setIsAngryBird(false);
+                    setPlayerName('');
+                  }}
+                  text="Close"
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    fontSize: '14px',
+                    backgroundColor: '#FF0000',
+                    boxShadow: '0 3px 0 #CC0000',
+                    borderRadius: '6px',
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
