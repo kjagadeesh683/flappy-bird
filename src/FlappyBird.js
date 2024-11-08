@@ -12,6 +12,54 @@ const hitSound = new Audio('/hit.mp3');
 flapSound.preload = 'auto';
 hitSound.preload = 'auto';
 
+// Add these constants near your other constants
+const DIFFICULTY_SETTINGS = {
+  easy: {
+    pipeSpeed: 2.5,
+    pipeGap: 170,
+    speedIncrement: 0.2,
+    label: 'Easy'
+  },
+  medium: {
+    pipeSpeed: 3.5,
+    pipeGap: 160,
+    speedIncrement: 0.4,
+    label: 'Medium'
+  },
+  hard: {
+    pipeSpeed: 4.0,
+    pipeGap: 150,
+    speedIncrement: 0.6,
+    label: 'Hard'
+  }
+};
+
+// Add these constants after your DIFFICULTY_SETTINGS
+const scoreCardStyle = {
+  backgroundColor: '#4169E1',
+  color: 'white',
+  fontSize: '14px',
+  padding: '6px 8px',
+  borderRadius: '5px',
+  boxShadow: '0 2px 0 #1E90FF',
+  textAlign: 'left',
+  userSelect: 'none',
+  minWidth: '120px',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  transition: 'all 0.3s ease',
+};
+
+const clickableScoreCardStyle = {
+  ...scoreCardStyle,
+  cursor: 'pointer',
+  '&:hover': {
+    backgroundColor: '#6495ED',
+    boxShadow: '0 4px 0 #1E90FF',
+  },
+};
+
 function FlappyBird() {
   // Move audioContext and buffers into component as refs
   const audioContextRef = useRef(null);
@@ -31,7 +79,7 @@ function FlappyBird() {
     return savedHighScore ? parseInt(savedHighScore, 10) : 0;
   });
   const [gameOver, setGameOver] = useState(false);
-  const [birdSpeed, setBirdSpeed] = useState(3);
+  const [birdSpeed, setBirdSpeed] = useState(DIFFICULTY_SETTINGS.easy.pipeSpeed);
   const [birdRotation, setBirdRotation] = useState(0);
   const [clouds, setClouds] = useState([
     { id: 1, x: 400, y: 50, scale: 0.8 },
@@ -61,6 +109,14 @@ function FlappyBird() {
 
   // Add new state for tracking top 10 status
   const [isInTopTen, setIsInTopTen] = useState(false);
+
+  const [difficulty, setDifficulty] = useState('easy');
+  const [currentSettings, setCurrentSettings] = useState(DIFFICULTY_SETTINGS.easy);
+
+  useEffect(() => {
+    setCurrentSettings(DIFFICULTY_SETTINGS[difficulty]);
+    setBirdSpeed(DIFFICULTY_SETTINGS[difficulty].pipeSpeed);
+  }, [difficulty]);
 
   const toggleMute = () => {
     setIsMuted(prevMuted => {
@@ -123,7 +179,8 @@ function FlappyBird() {
   const BIRD_LEFT_POSITION = 50;
   const CLOUD_SPEED = 0.5;
 
-  const Cloud = ({ x, y, scale }) => (
+  // Update the Cloud component with better performance optimizations
+  const Cloud = React.memo(({ x, y, scale }) => (
     <div
       style={{
         position: 'absolute',
@@ -135,9 +192,13 @@ function FlappyBird() {
         backgroundRepeat: 'no-repeat',
         opacity: 0.8,
         willChange: 'transform',
+        backfaceVisibility: 'hidden',
+        perspective: 1000,
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale',
       }}
     />
-  );
+  ));
 
   const jump = useCallback(() => {
     if (countdown !== null || showTopLeaderboard || showLeaderboard) return;
@@ -152,7 +213,7 @@ function FlappyBird() {
       setBirdPosition(250);
       setPipePosition(400);
       setBirdVelocity(0);
-      setBirdSpeed(INITIAL_BIRD_SPEED);
+      setBirdSpeed(currentSettings.pipeSpeed);
       lastPipeRef.current = 400;
       setIsAngryBird(false);
     }
@@ -163,7 +224,7 @@ function FlappyBird() {
     setTimeout(() => setBirdRotation(0), 300);
 
     playSound(flapBufferRef.current);
-  }, [gameStarted, gameOver, showTopLeaderboard, showLeaderboard, isMuted, countdown]);
+  }, [gameStarted, gameOver, showTopLeaderboard, showLeaderboard, isMuted, countdown, currentSettings]);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -199,7 +260,7 @@ function FlappyBird() {
             setScore((s) => {
               const newScore = s + 1;
               if (newScore % SPEED_INCREMENT_INTERVAL === 0) {
-                setBirdSpeed((speed) => speed + SPEED_INCREMENT);
+                setBirdSpeed((speed) => speed + currentSettings.speedIncrement);
               }
               return newScore;
             });
@@ -212,7 +273,7 @@ function FlappyBird() {
       }, 20);
     }
     return () => clearInterval(gameLoop);
-  }, [gameStarted, birdVelocity, gameOver, birdSpeed, score]);
+  }, [gameStarted, birdVelocity, gameOver, currentSettings]);
 
   // Update handleGameOver to use the refs
   const handleGameOver = useCallback(async () => {
@@ -254,19 +315,37 @@ function FlappyBird() {
     }
   }, [birdPosition, pipeHeight, pipePosition, score, highScore, handleGameOver]);
 
+  // Update the cloud movement useEffect
   useEffect(() => {
-    if (gameStarted && !gameOver) {
-      const cloudInterval = setInterval(() => {
-        setClouds(prevClouds =>
-          prevClouds.map(cloud => ({
-            ...cloud,
-            x: cloud.x <= -300 ? window.innerWidth + Math.random() * 200 : cloud.x - CLOUD_SPEED,
-          }))
-        );
-      }, 16);
+    let animationFrameId;
+    let lastTimestamp = 0;
+    const FPS = 60;
+    const frameInterval = 1000 / FPS;
 
-      return () => clearInterval(cloudInterval);
+    const updateClouds = (timestamp) => {
+      if (gameStarted && !gameOver) {
+        if (timestamp - lastTimestamp >= frameInterval) {
+          setClouds(prevClouds =>
+            prevClouds.map(cloud => ({
+              ...cloud,
+              x: cloud.x <= -300 ? window.innerWidth + Math.random() * 200 : cloud.x - CLOUD_SPEED,
+            }))
+          );
+          lastTimestamp = timestamp;
+        }
+        animationFrameId = requestAnimationFrame(updateClouds);
+      }
+    };
+
+    if (gameStarted && !gameOver) {
+      animationFrameId = requestAnimationFrame(updateClouds);
     }
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
   }, [gameStarted, gameOver]);
 
   useEffect(() => {
@@ -302,25 +381,26 @@ function FlappyBird() {
     if (playerName.trim() === '') return;
 
     try {
-      console.log('Submitting score:', { name: playerName.trim(), score: score });
+      console.log('Submitting score:', { name: playerName.trim(), score });
       const { data, error } = await supabase
         .from('leaderboard')
-        .insert({ name: playerName.trim(), score: score })
+        .insert([{
+          name: playerName.trim(),
+          score: score,
+          created_at: new Date().toISOString()
+        }])
         .select();
 
-      if (error) {
-        console.error('Supabase error:', error.message, error.details, error.hint);
-        throw error;
-      }
+      if (error) throw error;
 
       console.log('Score submitted successfully:', data);
+      setShowLeaderboard(false);
+      setPlayerName('');
+      setShowTopLeaderboard(true);
       await fetchLeaderboard();
-      setPlayerName(''); // Clear the input field after submission
-      setShowTopLeaderboard(true); // Show the top 10 leaderboard after submission
-      await fetchGlobalHighScore(); // Refresh the global high score after submitting
+      await fetchGlobalHighScore();
     } catch (error) {
-      console.error('Error submitting score:', error.message, error);
-      // You might want to show an error message to the user here
+      console.error('Error submitting score:', error);
     }
   };
 
@@ -409,31 +489,6 @@ function FlappyBird() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const scoreCardStyle = {
-    backgroundColor: 'rgb(65, 105, 225)',
-    color: 'white',
-    fontSize: '14px',
-    padding: '6px 8px',
-    borderRadius: '5px',
-    boxShadow: 'rgb(30, 144, 255) 0px 2px 0px',
-    textAlign: 'left',
-    userSelect: 'none',
-    minWidth: '120px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    transition: 'all 0.3s ease',
-  };
-
-  const clickableScoreCardStyle = {
-    ...scoreCardStyle,
-    cursor: 'pointer',
-    '&:hover': {
-      backgroundColor: '#6495ED',
-      boxShadow: '0 4px 0 #1E90FF',
-    },
-  };
-
   const handleGlobalScoreClick = () => {
     setShowTopLeaderboard(true);
     fetchLeaderboard();
@@ -512,6 +567,12 @@ function FlappyBird() {
       return false;
     }
   };
+
+  // Add new state for difficulty modal
+  const [showDifficultyModal, setShowDifficultyModal] = useState(false);
+
+  // Add this state to track where the leaderboard was opened from
+  const [leaderboardOpenedFromSettings, setLeaderboardOpenedFromSettings] = useState(false);
 
   return (
     <div style={{
@@ -663,6 +724,17 @@ function FlappyBird() {
             }}
           >
             <img src="/gamename.png" alt="Flappy Bird" style={{ maxWidth: '100%' }} />
+            <div style={{
+              color: 'white',
+              fontSize: '16px',
+              marginTop: '10px',
+              padding: '5px 10px',
+              backgroundColor: '#4169E1',
+              borderRadius: '15px',
+              display: 'inline-block',
+            }}>
+              {DIFFICULTY_SETTINGS[difficulty].label} Mode
+            </div>
           </div>
         )}
         {countdown !== null && (
@@ -682,7 +754,12 @@ function FlappyBird() {
         )}
         <Bird position={birdPosition} rotation={birdRotation} isAngry={isAngryBird} />
         {(gameStarted || gameOver) && countdown === null && (
-          <Pipe height={pipeHeight} position={pipePosition} gap={PIPE_GAP} style={pipeStyle(pipePosition)} />
+          <Pipe 
+            height={pipeHeight} 
+            position={pipePosition} 
+            gap={currentSettings.pipeGap} 
+            style={pipeStyle(pipePosition)} 
+          />
         )}
         {!gameStarted && !gameOver && !countdown && (
           <div
@@ -711,13 +788,14 @@ function FlappyBird() {
               backgroundColor: `rgba(0, 0, 0, ${leaderboardOpacity * 0.7})`,
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-around',
+              justifyContent: 'center',
               alignItems: 'center',
               color: 'white',
               fontFamily: 'Arial, sans-serif',
               opacity: leaderboardOpacity,
               transition: 'opacity 0.5s ease-in-out',
               padding: '40px 0',
+              zIndex: 1000,
             }}
           >
             <h2 style={{
@@ -733,7 +811,6 @@ function FlappyBird() {
             </div>
 
             {isInTopTen ? (
-              // Show name input form only if player made it to top 10
               <>
                 <h3 style={{
                   color: 'white',
@@ -743,41 +820,46 @@ function FlappyBird() {
                 }}>
                   You're on the Leaderboard!
                 </h3>
-                <form onSubmit={submitScore} style={{
+                <div style={{
                   marginBottom: '30px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   width: '80%',
+                  maxWidth: '300px',
+                  gap: '20px'
                 }}>
-                  <div style={{
-                    marginBottom: '20px',
-                    fontSize: '24px',
-                  }}>
-                    Enter your name:
-                  </div>
                   <input
                     type="text"
                     value={playerName}
                     onChange={(e) => setPlayerName(e.target.value)}
+                    placeholder="Enter your name"
                     style={{
                       padding: '10px',
-                      width: '80%',
-                      marginBottom: '20px',
-                      backgroundColor: 'rgba(255,255,255,0.8)',
-                      border: 'none',
+                      fontSize: '16px',
+                      width: '100%',
                       borderRadius: '5px',
-                      fontSize: '18px',
+                      border: 'none',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
                     }}
                   />
-                  <GameButton onClick={submitScore} text="Submit" />
-                </form>
+                  <GameButton
+                    onClick={submitScore}
+                    text="Submit"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      fontSize: '16px',
+                      backgroundColor: '#4169E1',
+                      boxShadow: '0 4px 0 #1E90FF',
+                    }}
+                  />
+                </div>
               </>
             ) : (
-              // Show Play Again and Back to Home buttons if player didn't make it to top 10
               <div style={{
                 display: 'flex',
-                gap: '20px',
+                gap: '15px',
                 marginTop: '20px',
               }}>
                 <GameButton
@@ -786,7 +868,7 @@ function FlappyBird() {
                     setBirdPosition(250);
                     setPipePosition(400);
                     setBirdVelocity(0);
-                    setBirdSpeed(INITIAL_BIRD_SPEED);
+                    setBirdSpeed(currentSettings.pipeSpeed);
                     setScore(0);
                     setIsAngryBird(false);
                     setGameOver(false);
@@ -808,6 +890,10 @@ function FlappyBird() {
                     }, 1000);
                   }}
                   text="Play Again"
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '16px',
+                  }}
                 />
                 <GameButton
                   onClick={() => {
@@ -817,7 +903,7 @@ function FlappyBird() {
                     setBirdPosition(250);
                     setPipePosition(400);
                     setBirdVelocity(0);
-                    setBirdSpeed(INITIAL_BIRD_SPEED);
+                    setBirdSpeed(currentSettings.pipeSpeed);
                     setScore(0);
                     setIsAngryBird(false);
                     setClouds(prevClouds => prevClouds.map(cloud => ({
@@ -826,6 +912,10 @@ function FlappyBird() {
                     })));
                   }}
                   text="Back to Home"
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '16px',
+                  }}
                 />
               </div>
             )}
@@ -954,18 +1044,23 @@ function FlappyBird() {
                 <GameButton
                   onClick={() => {
                     setShowTopLeaderboard(false);
-                    setShowLeaderboard(false);
-                    setGameStarted(false);
-                    setGameOver(false);
-                    setBirdPosition(250);
-                    setPipePosition(400);
-                    setBirdVelocity(0);
-                    setBirdSpeed(INITIAL_BIRD_SPEED);
-                    setScore(0);
-                    setIsAngryBird(false);
-                    setPlayerName('');
+                    if (leaderboardOpenedFromSettings) {  // Check if opened from settings
+                      setShowSettings(true);
+                      setLeaderboardOpenedFromSettings(false);  // Reset the flag
+                    } else {
+                      setShowLeaderboard(false);
+                      setGameStarted(false);
+                      setGameOver(false);
+                      setBirdPosition(250);
+                      setPipePosition(400);
+                      setBirdVelocity(0);
+                      setBirdSpeed(INITIAL_BIRD_SPEED);
+                      setScore(0);
+                      setIsAngryBird(false);
+                      setPlayerName('');
+                    }
                   }}
-                  text="Close"
+                  text={leaderboardOpenedFromSettings ? "Back" : "Close"}  // Change text based on where it was opened from
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -973,6 +1068,16 @@ function FlappyBird() {
                     backgroundColor: '#FF0000',
                     boxShadow: '0 3px 0 #CC0000',
                     borderRadius: '6px',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#FF3333';
+                    e.currentTarget.style.boxShadow = '0 2px 0 #CC0000';
+                    e.currentTarget.style.transform = 'translateY(1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#FF0000';
+                    e.currentTarget.style.boxShadow = '0 3px 0 #CC0000';
+                    e.currentTarget.style.transform = 'translateY(0)';
                   }}
                 />
               </div>
@@ -987,9 +1092,8 @@ function FlappyBird() {
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              backgroundColor: 'black',
               display: 'flex',
-              flexDirection: 'column',
               justifyContent: 'center',
               alignItems: 'center',
               zIndex: 2000,
@@ -998,21 +1102,23 @@ function FlappyBird() {
           >
             <div
               style={{
-                backgroundColor: 'black',
-                padding: '30px',
+                backgroundColor: '#1a1a2e',
+                padding: '20px',
                 borderRadius: '15px',
                 width: '80%',
                 maxWidth: '300px',
+                border: '2px solid #4169E1',
               }}
             >
               <h2 style={{
                 color: 'white',
                 textAlign: 'center',
-                marginBottom: '30px',
-                fontSize: '28px',
+                marginBottom: '20px',
+                fontSize: '24px',
               }}>
                 Settings
               </h2>
+
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -1020,16 +1126,28 @@ function FlappyBird() {
               }}>
                 <GameButton
                   onClick={() => {
+                    setShowDifficultyModal(true);
+                    setShowSettings(false);
+                  }}
+                  text="Game Mode"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    fontSize: '16px',
+                  }}
+                />
+                <GameButton
+                  onClick={() => {
                     setShowSettings(false);
                     setShowTopLeaderboard(true);
+                    setLeaderboardOpenedFromSettings(true);  // Set this flag when opening from settings
                     fetchLeaderboard();
                   }}
                   text="Leaderboard"
                   style={{
                     width: '100%',
-                    padding: '15px',
-                    fontSize: '18px',
-                    backgroundColor: '#4169E1',
+                    padding: '12px',
+                    fontSize: '16px',
                   }}
                 />
                 <GameButton
@@ -1037,8 +1155,8 @@ function FlappyBird() {
                   text="Close"
                   style={{
                     width: '100%',
-                    padding: '15px',
-                    fontSize: '18px',
+                    padding: '12px',
+                    fontSize: '16px',
                     backgroundColor: '#FF0000',
                     boxShadow: '0 4px 0 #CC0000',
                   }}
@@ -1054,6 +1172,95 @@ function FlappyBird() {
                   }}
                 />
               </div>
+            </div>
+          </div>
+        )}
+        {/* Add new Difficulty Modal */}
+        {showDifficultyModal && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'black',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 2000,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                backgroundColor: '#1a1a2e',
+                padding: '20px',
+                borderRadius: '15px',
+                width: '80%',
+                maxWidth: '300px',
+                border: '2px solid #4169E1',
+              }}
+            >
+              <h2 style={{
+                color: 'white',
+                textAlign: 'center',
+                marginBottom: '20px',
+                fontSize: '24px',
+              }}>
+                Game Mode
+              </h2>
+
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '15px',
+                marginBottom: '20px',
+              }}>
+                {Object.keys(DIFFICULTY_SETTINGS).map((level) => (
+                  <GameButton
+                    key={level}
+                    onClick={() => {
+                      setDifficulty(level);
+                      setShowDifficultyModal(false);
+                      setShowSettings(true);
+                    }}
+                    text={DIFFICULTY_SETTINGS[level].label}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      fontSize: '16px',
+                      backgroundColor: difficulty === level ? '#4169E1' : '#2d4ba1',
+                      border: difficulty === level ? '2px solid white' : 'none',
+                    }}
+                  />
+                ))}
+              </div>
+
+              <GameButton
+                onClick={() => {
+                  setShowDifficultyModal(false);
+                  setShowSettings(true);
+                }}
+                text="Back"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: '16px',
+                  backgroundColor: '#FF0000',
+                  boxShadow: '0 4px 0 #CC0000',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#FF3333';
+                  e.currentTarget.style.boxShadow = '0 2px 0 #CC0000';
+                  e.currentTarget.style.transform = 'translateY(2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#FF0000';
+                  e.currentTarget.style.boxShadow = '0 4px 0 #CC0000';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              />
             </div>
           </div>
         )}
