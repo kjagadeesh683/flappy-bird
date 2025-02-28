@@ -541,29 +541,25 @@ function FlappyBird() {
     marginLeft: '10px',
   };
 
-  // Update the isScoreInTopTen function to check daily scores
+  // Update the isScoreInTopTen function to check overall top 10
   const isScoreInTopTen = async (newScore) => {
     try {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-
       const { data, error } = await supabase
         .from('leaderboard')
         .select('score')
-        .gte('created_at', today)
         .order('score', { ascending: false })
         .limit(10);
 
       if (error) throw error;
 
-      // If there are less than 10 scores today, new score will be in top 10
+      // If there are less than 10 scores overall, new score will be in top 10
       if (data.length < 10) return true;
 
-      // Check if new score is higher than the lowest score in today's top 10
+      // Check if new score is higher than the lowest score in overall top 10
       const lowestTopScore = data[data.length - 1].score;
       return newScore > lowestTopScore;
     } catch (error) {
-      console.error('Error checking daily top scores:', error);
+      console.error('Error checking top scores:', error);
       return false;
     }
   };
@@ -810,53 +806,8 @@ function FlappyBird() {
               Your Score: {score}
             </div>
 
-            {isInTopTen ? (
-              <>
-                <h3 style={{
-                  color: 'white',
-                  fontSize: '28px',
-                  marginBottom: '30px',
-                  textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
-                }}>
-                  You're on the Leaderboard!
-                </h3>
-                <div style={{
-                  marginBottom: '30px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  width: '80%',
-                  maxWidth: '300px',
-                  gap: '20px'
-                }}>
-                  <input
-                    type="text"
-                    value={playerName}
-                    onChange={(e) => setPlayerName(e.target.value)}
-                    placeholder="Enter your name"
-                    style={{
-                      padding: '10px',
-                      fontSize: '16px',
-                      width: '100%',
-                      borderRadius: '5px',
-                      border: 'none',
-                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    }}
-                  />
-                  <GameButton
-                    onClick={submitScore}
-                    text="Submit"
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      fontSize: '16px',
-                      backgroundColor: '#4169E1',
-                      boxShadow: '0 4px 0 #1E90FF',
-                    }}
-                  />
-                </div>
-              </>
-            ) : (
+            {score === 0 ? (
+              // Show restart options for zero score
               <div style={{
                 display: 'flex',
                 gap: '15px',
@@ -872,8 +823,6 @@ function FlappyBird() {
                     setScore(0);
                     setIsAngryBird(false);
                     setGameOver(false);
-
-                    // Start countdown
                     setCountdown(3);
                     const countdownInterval = setInterval(() => {
                       setCountdown(prev => {
@@ -889,7 +838,7 @@ function FlappyBird() {
                       });
                     }, 1000);
                   }}
-                  text="Play Again"
+                  text="Try Again"
                   style={{
                     padding: '12px 24px',
                     fontSize: '16px',
@@ -918,6 +867,91 @@ function FlappyBird() {
                   }}
                 />
               </div>
+            ) : (
+              // Show leaderboard entry for scores > 0
+              <>
+                <h3 style={{
+                  color: 'white',
+                  fontSize: '28px',
+                  marginBottom: '30px',
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+                }}>
+                  Add Your Score to Leaderboard!
+                </h3>
+                <div style={{
+                  marginBottom: '30px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  width: '80%',
+                  maxWidth: '300px',
+                  gap: '20px'
+                }}>
+                  <input
+                    type="text"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    placeholder="Enter your name"
+                    style={{
+                      padding: '10px',
+                      fontSize: '16px',
+                      width: '100%',
+                      borderRadius: '5px',
+                      border: 'none',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                    <GameButton
+                      onClick={submitScore}
+                      text="Submit Score"
+                      style={{
+                        flex: 1,
+                        padding: '12px',
+                        fontSize: '16px',
+                        backgroundColor: '#4169E1',
+                        boxShadow: '0 4px 0 #1E90FF',
+                      }}
+                    />
+                    <GameButton
+                      onClick={() => {
+                        setShowLeaderboard(false);
+                        setGameStarted(false);
+                        setGameOver(false);
+                        setBirdPosition(250);
+                        setPipePosition(400);
+                        setBirdVelocity(0);
+                        setBirdSpeed(currentSettings.pipeSpeed);
+                        setScore(0);
+                        setIsAngryBird(false);
+                      }}
+                      text="Skip"
+                      style={{
+                        flex: 1,
+                        padding: '12px',
+                        fontSize: '16px',
+                        backgroundColor: '#4169E1',
+                        boxShadow: '0 4px 0 #1E90FF',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        transition: 'all 0.1s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#6495ED';
+                        e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
+                        e.currentTarget.style.transform = 'translateY(2px)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#4169E1';
+                        e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -990,39 +1024,41 @@ function FlappyBird() {
               </div>
 
               <div style={{
-                maxHeight: '300px',
+                height: '300px', // Fixed height
                 overflowY: 'auto',
                 padding: '8px',
                 backgroundColor: '#1a1a2e',
               }}>
                 {leaderboard.length > 0 ? (
-                  leaderboard.map((entry, index) => (
-                    <div key={index} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '8px 12px',
-                      margin: '2px 0',
-                      backgroundColor: index % 2 === 0 ? 'rgba(65, 105, 225, 0.15)' : 'rgba(65, 105, 225, 0.05)',
-                      borderRadius: '6px',
-                      color: 'white',
-                      fontSize: '14px',
-                    }}>
-                      <span style={{
+                  <div style={{ minHeight: '300px' }}> {/* Minimum height container */}
+                    {leaderboard.map((entry, index) => (
+                      <div key={index} style={{
                         display: 'flex',
+                        justifyContent: 'space-between',
                         alignItems: 'center',
-                        gap: '8px',
+                        padding: '8px 12px',
+                        margin: '2px 0',
+                        backgroundColor: index % 2 === 0 ? 'rgba(65, 105, 225, 0.15)' : 'rgba(65, 105, 225, 0.05)',
+                        borderRadius: '6px',
+                        color: 'white',
+                        fontSize: '14px',
                       }}>
-                        <strong style={{ minWidth: '20px' }}>
-                          {index + 1}.
-                        </strong>
-                        {entry.name}
-                      </span>
-                      <span style={{ fontWeight: 'bold' }}>
-                        {entry.score}
-                      </span>
-                    </div>
-                  ))
+                        <span style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}>
+                          <strong style={{ minWidth: '20px' }}>
+                            {index + 1}.
+                          </strong>
+                          {entry.name}
+                        </span>
+                        <span style={{ fontWeight: 'bold' }}>
+                          {entry.score}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <div style={{
                     color: 'white',
@@ -1030,6 +1066,10 @@ function FlappyBird() {
                     padding: '15px',
                     fontSize: '14px',
                     opacity: 0.7,
+                    height: '300px', // Match the parent height
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}>
                     No scores yet for this period
                   </div>
@@ -1057,7 +1097,6 @@ function FlappyBird() {
                       setBirdSpeed(INITIAL_BIRD_SPEED);
                       setScore(0);
                       setIsAngryBird(false);
-                      setPlayerName('');
                     }
                   }}
                   text={leaderboardOpenedFromSettings ? "Back" : "Close"}  // Change text based on where it was opened from
