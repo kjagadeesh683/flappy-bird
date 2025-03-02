@@ -1,12 +1,16 @@
 import React from 'react';
 
-const Pipe = ({ height, position, gap }) => {
+const Pipe = ({ height, position, gap, isDarkMode }) => {
   const pipeWidth = 60;
   const pipeEndHeight = 20;
 
   const pipeStyle = {
-    background: 'linear-gradient(90deg, #2ecc71 0%, #27ae60 100%)',
-    boxShadow: '2px 0 5px rgba(0, 0, 0, 0.1)',
+    background: isDarkMode 
+      ? 'linear-gradient(90deg, #1a472a 0%, #2d5a3f 100%)'
+      : 'linear-gradient(90deg, #2ecc71 0%, #27ae60 100%)',
+    boxShadow: isDarkMode
+      ? '2px 0 5px rgba(0, 0, 0, 0.3)'
+      : '2px 0 5px rgba(0, 0, 0, 0.1)',
   };
 
   return (
