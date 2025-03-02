@@ -3,7 +3,8 @@ import Bird from './components/Bird';
 import Pipe from './components/Pipe';
 import GameButton from './components/GameButton';
 import { supabase } from './supabase';
-import { FaVolumeMute, FaVolumeUp, FaCog } from 'react-icons/fa';
+import { FaVolumeMute, FaVolumeUp, FaCog, FaMoon, FaSun as OldSun } from 'react-icons/fa';
+import { BsSunFill } from 'react-icons/bs';
 
 // Keep these at the top
 const flapSound = new Audio('/flap.mp3');
@@ -34,30 +35,18 @@ const DIFFICULTY_SETTINGS = {
   }
 };
 
-// Add these constants after your DIFFICULTY_SETTINGS
-const scoreCardStyle = {
-  backgroundColor: '#4169E1',
-  color: 'white',
-  fontSize: '14px',
-  padding: '6px 8px',
-  borderRadius: '5px',
-  boxShadow: '0 2px 0 #1E90FF',
-  textAlign: 'left',
-  userSelect: 'none',
-  minWidth: '120px',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  transition: 'all 0.3s ease',
-};
-
-const clickableScoreCardStyle = {
-  ...scoreCardStyle,
-  cursor: 'pointer',
-  '&:hover': {
-    backgroundColor: '#6495ED',
-    boxShadow: '0 4px 0 #1E90FF',
+// Add these color constants near the top of the file
+const COLORS = {
+  light: {
+    primary: '#4169E1',    // Royal Blue
+    shadow: '#1E90FF',     // Bright Blue
+    hover: '#6495ED',      // Cornflower Blue
   },
+  dark: {
+    primary: '#1a2d61',    // Darker Blue
+    shadow: '#142347',     // Even Darker Blue
+    hover: '#233c7c',      // Slightly Lighter Blue
+  }
 };
 
 function FlappyBird() {
@@ -65,6 +54,9 @@ function FlappyBird() {
   const audioContextRef = useRef(null);
   const flapBufferRef = useRef(null);
   const hitBufferRef = useRef(null);
+
+  // Add isDarkMode state before backgroundColor
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Add existing state variables
   const [isMuted, setIsMuted] = useState(false);
@@ -81,19 +73,19 @@ function FlappyBird() {
   const [gameOver, setGameOver] = useState(false);
   const [birdSpeed, setBirdSpeed] = useState(DIFFICULTY_SETTINGS.easy.pipeSpeed);
   const [birdRotation, setBirdRotation] = useState(0);
-  const [clouds, setClouds] = useState([
-    { id: 1, x: 400, y: 50, scale: 0.8 },
-    { id: 2, x: 700, y: 100, scale: 1.0 },
-    { id: 3, x: 1000, y: 150, scale: 0.9 },
-    { id: 4, x: 1300, y: 80, scale: 1.1 },
-    { id: 5, x: 1600, y: 120, scale: 0.7 },
-    { id: 6, x: 1900, y: 60, scale: 0.9 },
-    { id: 7, x: 2200, y: 130, scale: 0.8 },
-    { id: 8, x: 2500, y: 90, scale: 1.0 },
-  ]);
+  const [clouds, setClouds] = useState(() =>
+    Array.from({ length: 8 }, (_, i) => ({
+      id: i + 1,
+      x: (i * 300) + (Math.random() * 200),
+      y: 30 + (Math.random() * 100),
+      scale: 0.7 + (Math.random() * 0.3),
+    }))
+  );
   const lastPipeRef = useRef(400);
   const [isAngryBird, setIsAngryBird] = useState(false);
-  const [backgroundColor, setBackgroundColor] = useState('skyblue');
+  const [backgroundColor, setBackgroundColor] = useState(() =>
+    isDarkMode ? '#1a1a2e' : '#87CEEB'
+  );
   const [gameOverOpacity, setGameOverOpacity] = useState(0);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [playerName, setPlayerName] = useState('');
@@ -125,6 +117,10 @@ function FlappyBird() {
       hitSound.muted = newMutedState;
       return newMutedState;
     });
+  };
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(prev => !prev);
   };
 
   // Move initAudioContext inside component
@@ -177,7 +173,9 @@ function FlappyBird() {
   const BIRD_WIDTH = 80;
   const BIRD_HEIGHT = 56;
   const BIRD_LEFT_POSITION = 50;
-  const CLOUD_SPEED = 0.5;
+  const CLOUD_SPEED = 0.3; // Reduced speed for smoother movement
+  const CLOUD_WIDTH = 300;
+  const CLOUD_COUNT = 8;
 
   // Update the Cloud component with better performance optimizations
   const Cloud = React.memo(({ x, y, scale }) => (
@@ -185,17 +183,14 @@ function FlappyBird() {
       style={{
         position: 'absolute',
         transform: `translate3d(${x}px, ${y}px, 0) scale(${scale})`,
-        width: '300px',
+        width: CLOUD_WIDTH,
         height: '150px',
         backgroundImage: 'url("/clouds.png")',
         backgroundSize: 'contain',
         backgroundRepeat: 'no-repeat',
         opacity: 0.8,
         willChange: 'transform',
-        backfaceVisibility: 'hidden',
-        perspective: 1000,
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
+        pointerEvents: 'none',
       }}
     />
   ));
@@ -315,24 +310,26 @@ function FlappyBird() {
     }
   }, [birdPosition, pipeHeight, pipePosition, score, highScore, handleGameOver]);
 
-  // Update the cloud movement useEffect
+  // Update the cloud movement useEffect with better performance
   useEffect(() => {
+    let lastTime = 0;
     let animationFrameId;
-    let lastTimestamp = 0;
-    const FPS = 60;
-    const frameInterval = 1000 / FPS;
 
-    const updateClouds = (timestamp) => {
+    const updateClouds = (currentTime) => {
+      if (!lastTime) lastTime = currentTime;
+      const deltaTime = currentTime - lastTime;
+
       if (gameStarted && !gameOver) {
-        if (timestamp - lastTimestamp >= frameInterval) {
-          setClouds(prevClouds =>
-            prevClouds.map(cloud => ({
-              ...cloud,
-              x: cloud.x <= -300 ? window.innerWidth + Math.random() * 200 : cloud.x - CLOUD_SPEED,
-            }))
-          );
-          lastTimestamp = timestamp;
-        }
+        setClouds(prevClouds =>
+          prevClouds.map(cloud => ({
+            ...cloud,
+            x: cloud.x <= -CLOUD_WIDTH
+              ? Math.max(...prevClouds.map(c => c.x)) + CLOUD_WIDTH
+              : cloud.x - (CLOUD_SPEED * (deltaTime / 16)), // Smooth movement based on frame time
+          }))
+        );
+
+        lastTime = currentTime;
         animationFrameId = requestAnimationFrame(updateClouds);
       }
     };
@@ -524,6 +521,32 @@ function FlappyBird() {
     }
   };
 
+  // Update the scoreCardStyle to use consistent colors
+  const scoreCardStyle = {
+    backgroundColor: '#4169E1',    // Royal Blue
+    color: 'white',
+    fontSize: '14px',
+    padding: '6px 8px',
+    borderRadius: '5px',
+    boxShadow: '0 2px 0 #1E90FF', // Bright Blue
+    textAlign: 'left',
+    userSelect: 'none',
+    minWidth: '120px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    transition: 'all 0.3s ease',
+  };
+
+  const clickableScoreCardStyle = {
+    ...scoreCardStyle,
+    cursor: 'pointer',
+    '&:hover': {
+      backgroundColor: '#6495ED',  // Cornflower Blue
+      boxShadow: '0 4px 0 #1E90FF',
+    },
+  };
+
   const settingsButtonStyle = {
     width: '50px',
     height: '50px',
@@ -570,6 +593,23 @@ function FlappyBird() {
   // Add this state to track where the leaderboard was opened from
   const [leaderboardOpenedFromSettings, setLeaderboardOpenedFromSettings] = useState(false);
 
+  // Add this useEffect at the component level
+  useEffect(() => {
+    // Set body and html background to black
+    document.body.style.backgroundColor = '#000000';
+    document.body.style.margin = '0';
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.backgroundColor = '#000000';
+
+    // Cleanup function
+    return () => {
+      document.body.style.backgroundColor = '';
+      document.body.style.margin = '';
+      document.body.style.overflow = '';
+      document.documentElement.style.backgroundColor = '';
+    };
+  }, []);
+
   return (
     <div style={{
       display: 'flex',
@@ -577,10 +617,15 @@ function FlappyBird() {
       alignItems: 'center',
       height: '100vh',
       width: '100vw',
-      backgroundColor: '#87CEEB',
+      backgroundColor: '#000000',
       overflow: 'hidden',
       margin: 0,
       padding: 0,
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
     }}>
       <div
         ref={gameRef}
@@ -589,12 +634,14 @@ function FlappyBird() {
           height: '500px',
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
-          backgroundColor: '#87CEEB',
+          backgroundColor: isDarkMode ? '#000000' : '#87CEEB',
           position: 'relative',
           overflow: 'hidden',
-          border: '2px solid #333',
+          border: `2px solid ${isDarkMode ? '#333333' : '#333333'}`,
           borderRadius: '10px',
-          boxShadow: '0 0 20px rgba(0, 0, 0, 0.1)',
+          boxShadow: isDarkMode
+            ? '0 0 20px rgba(51, 51, 51, 0.4)'
+            : '0 0 20px rgba(0, 0, 0, 0.1)',
         }}
         onClick={gameStarted ? jump : undefined}
       >
@@ -669,20 +716,18 @@ function FlappyBird() {
               <GameButton
                 onClick={(e) => {
                   e.stopPropagation();
+                  toggleDarkMode();
+                }}
+                text={isDarkMode ? <BsSunFill size={24} /> : <FaMoon size={24} />}
+                style={settingsButtonStyle}
+              />
+              <GameButton
+                onClick={(e) => {
+                  e.stopPropagation();
                   toggleMute();
                 }}
                 text={isMuted ? <FaVolumeMute size={24} /> : <FaVolumeUp size={24} />}
                 style={settingsButtonStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#6495ED';
-                  e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
-                  e.currentTarget.style.transform = 'translateY(2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#4169E1';
-                  e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
               />
               <GameButton
                 onClick={(e) => {
@@ -691,16 +736,6 @@ function FlappyBird() {
                 }}
                 text={<FaCog size={24} />}
                 style={settingsButtonStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#6495ED';
-                  e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
-                  e.currentTarget.style.transform = 'translateY(2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#4169E1';
-                  e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
               />
             </div>
           </>
@@ -750,11 +785,12 @@ function FlappyBird() {
         )}
         <Bird position={birdPosition} rotation={birdRotation} isAngry={isAngryBird} />
         {(gameStarted || gameOver) && countdown === null && (
-          <Pipe 
-            height={pipeHeight} 
-            position={pipePosition} 
-            gap={currentSettings.pipeGap} 
-            style={pipeStyle(pipePosition)} 
+          <Pipe
+            height={pipeHeight}
+            position={pipePosition}
+            gap={currentSettings.pipeGap}
+            style={pipeStyle(pipePosition)}
+            isDarkMode={isDarkMode}
           />
         )}
         {!gameStarted && !gameOver && !countdown && (
@@ -938,16 +974,6 @@ function FlappyBird() {
                         cursor: 'pointer',
                         transition: 'all 0.1s ease',
                       }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#6495ED';
-                        e.currentTarget.style.boxShadow = '0 2px 0 #1E90FF';
-                        e.currentTarget.style.transform = 'translateY(2px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#4169E1';
-                        e.currentTarget.style.boxShadow = '0 4px 0 #1E90FF';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}
                     />
                   </div>
                 </div>
@@ -1108,16 +1134,6 @@ function FlappyBird() {
                     boxShadow: '0 3px 0 #CC0000',
                     borderRadius: '6px',
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#FF3333';
-                    e.currentTarget.style.boxShadow = '0 2px 0 #CC0000';
-                    e.currentTarget.style.transform = 'translateY(1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#FF0000';
-                    e.currentTarget.style.boxShadow = '0 3px 0 #CC0000';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
                 />
               </div>
             </div>
@@ -1199,16 +1215,6 @@ function FlappyBird() {
                     backgroundColor: '#FF0000',
                     boxShadow: '0 4px 0 #CC0000',
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#FF3333';
-                    e.currentTarget.style.boxShadow = '0 2px 0 #CC0000';
-                    e.currentTarget.style.transform = 'translateY(2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#FF0000';
-                    e.currentTarget.style.boxShadow = '0 4px 0 #CC0000';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
                 />
               </div>
             </div>
@@ -1269,7 +1275,7 @@ function FlappyBird() {
                       width: '100%',
                       padding: '12px',
                       fontSize: '16px',
-                      backgroundColor: difficulty === level ? '#4169E1' : '#2d4ba1',
+                      backgroundColor: '#4169E1',
                       border: difficulty === level ? '2px solid white' : 'none',
                     }}
                   />
@@ -1288,16 +1294,6 @@ function FlappyBird() {
                   fontSize: '16px',
                   backgroundColor: '#FF0000',
                   boxShadow: '0 4px 0 #CC0000',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#FF3333';
-                  e.currentTarget.style.boxShadow = '0 2px 0 #CC0000';
-                  e.currentTarget.style.transform = 'translateY(2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#FF0000';
-                  e.currentTarget.style.boxShadow = '0 4px 0 #CC0000';
-                  e.currentTarget.style.transform = 'translateY(0)';
                 }}
               />
             </div>
